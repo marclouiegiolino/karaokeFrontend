@@ -331,3 +331,40 @@ export function parseNotesJsonImport(
 export function serializePackageBytes(pkg: SongPackage): Uint8Array {
   return utf8Encoder.encode(JSON.stringify(pkg));
 }
+
+export type TranscriptionLine = {
+  text: string;
+  startMs: number | null;
+  endMs: number | null;
+};
+
+export type TranscriptionDraftResult = {
+  songId: string;
+  model: string;
+  language: string | null;
+  hasTimestamps: boolean;
+  lines: TranscriptionLine[];
+};
+
+export function transcriptionLinesToEditable(
+  lines: readonly TranscriptionLine[],
+): EditableLyricLine[] {
+  return lines
+    .map((line) => ({
+      id: createRowId("lyric-ai"),
+      text: line.text.trim(),
+      startMs: line.startMs,
+      endMs: line.endMs,
+    }))
+    .filter((line) => line.text.length > 0);
+}
+
+export function applyTranscriptionDraft(
+  existingLyrics: readonly EditableLyricLine[],
+  incomingLines: readonly TranscriptionLine[],
+  mode: "replace" | "append",
+): EditableLyricLine[] {
+  const generated = transcriptionLinesToEditable(incomingLines);
+  if (mode === "replace") return generated;
+  return [...existingLyrics.map((row) => ({ ...row })), ...generated];
+}

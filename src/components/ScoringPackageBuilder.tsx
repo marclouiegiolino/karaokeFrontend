@@ -11,6 +11,7 @@ import {
   midiNoteLabel,
   parseLyricsBlock,
   parseNotesJsonImport,
+  TranscriptionDraftResult,
   validateSongPackage,
 } from "@/lib/songPackage";
 import styles from "@/app/page.module.css";
@@ -24,10 +25,18 @@ type ScoringPackageBuilderProps = {
   notes: EditableTargetNote[];
   reviewed: boolean;
   disabled: boolean;
+  canTranscribe?: boolean;
+  transcribeBusy?: boolean;
+  transcribeError?: string;
+  transcribeNotice?: string;
+  transcribeDisabledHint?: string;
+  pendingTranscript?: TranscriptionDraftResult | null;
   onChangeLyrics: (next: EditableLyricLine[]) => void;
   onChangeNotes: (next: EditableTargetNote[]) => void;
   onChangeReviewed: (next: boolean) => void;
   onSeekToMs: (ms: number) => void;
+  onGenerateLyrics?: () => void;
+  onResolvePendingTranscript?: (mode: "replace" | "append" | "discard") => void;
 };
 
 export function ScoringPackageBuilder({
@@ -39,10 +48,18 @@ export function ScoringPackageBuilder({
   notes,
   reviewed,
   disabled,
+  canTranscribe = false,
+  transcribeBusy = false,
+  transcribeError = "",
+  transcribeNotice = "",
+  transcribeDisabledHint = "",
+  pendingTranscript = null,
   onChangeLyrics,
   onChangeNotes,
   onChangeReviewed,
   onSeekToMs,
+  onGenerateLyrics,
+  onResolvePendingTranscript,
 }: ScoringPackageBuilderProps) {
   const [lyricsDraftText, setLyricsDraftText] = useState("");
   const [selectedLyricId, setSelectedLyricId] = useState<string | null>(null);
@@ -270,7 +287,64 @@ export function ScoringPackageBuilder({
           >
             + Add empty line
           </button>
+          {onGenerateLyrics && (
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              disabled={disabled || transcribeBusy || !canTranscribe}
+              onClick={onGenerateLyrics}
+            >
+              {transcribeBusy ? "Generating lyrics from audio…" : "Generate lyrics from audio"}
+            </button>
+          )}
         </div>
+        {onGenerateLyrics && !canTranscribe && transcribeDisabledHint && (
+          <p className={styles.mutedSmall}>{transcribeDisabledHint}</p>
+        )}
+        {transcribeError && (
+          <div className={styles.validationBox} role="alert">
+            <strong>Transcription error:</strong> {transcribeError}
+          </div>
+        )}
+        {transcribeNotice && !transcribeError && (
+          <div className={styles.validationOk} role="status">
+            {transcribeNotice}
+          </div>
+        )}
+        {pendingTranscript && onResolvePendingTranscript && (
+          <div className={styles.draftResume} role="region" aria-label="Generated transcript draft">
+            <span>
+              <strong>Transcript ready ({pendingTranscript.lines.length} lines):</strong> keep your
+              existing manual lyrics by appending, or replace them?
+            </span>
+            <div className={styles.rowActions}>
+              <button
+                type="button"
+                className={styles.miniButton}
+                disabled={disabled || transcribeBusy}
+                onClick={() => onResolvePendingTranscript("append")}
+              >
+                Append after existing
+              </button>
+              <button
+                type="button"
+                className={styles.miniButton}
+                disabled={disabled || transcribeBusy}
+                onClick={() => onResolvePendingTranscript("replace")}
+              >
+                Replace existing
+              </button>
+              <button
+                type="button"
+                className={styles.miniButton}
+                disabled={disabled || transcribeBusy}
+                onClick={() => onResolvePendingTranscript("discard")}
+              >
+                Discard draft
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className={styles.timelineBar}>

@@ -116,6 +116,53 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body;
 }
 
+export type SongListResponse = {
+  data: Song[];
+  page: number;
+  pageSize: number;
+};
+
+export async function listFavorites(page = 1, pageSize = 50): Promise<SongListResponse> {
+  return api<SongListResponse>(`/favorites?page=${page}&pageSize=${pageSize}`);
+}
+
+export async function addFavorite(songId: string): Promise<void> {
+  await api<void>(`/favorites/${encodeURIComponent(songId)}`, { method: "PUT" });
+}
+
+export async function removeFavorite(songId: string): Promise<void> {
+  await api<void>(`/favorites/${encodeURIComponent(songId)}`, { method: "DELETE" });
+}
+
+export type TranscribeSongResponse = {
+  data: {
+    songId: string;
+    model: string;
+    language: string | null;
+    hasTimestamps: boolean;
+    lines: Array<{
+      text: string;
+      startMs: number | null;
+      endMs: number | null;
+    }>;
+  };
+};
+
+export async function transcribeSongLyrics(
+  songId: string,
+  language?: string,
+): Promise<TranscribeSongResponse["data"]> {
+  const body = language?.trim() ? { language: language.trim() } : {};
+  const result = await api<TranscribeSongResponse>(
+    `/songs/${encodeURIComponent(songId)}/lyrics/transcribe`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
+  return result.data;
+}
+
 export function mediaType(file: File, kind: "audio" | "package") {
   if (kind === "package") return "application/json";
   const known: Record<string, string> = {
