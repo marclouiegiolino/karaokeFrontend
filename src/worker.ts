@@ -1,5 +1,6 @@
 interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
+  BACKEND_API?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> };
   BACKEND_API_ORIGIN: string;
 }
 
@@ -69,7 +70,9 @@ async function proxyApi(request: Request, env: Env): Promise<Response> {
 
   let upstream: Response;
   try {
-    upstream = await fetch(target, init);
+    upstream = env.BACKEND_API
+      ? await env.BACKEND_API.fetch(target.href, init)
+      : await fetch(target.href, init);
   } catch {
     return Response.json(
       { error: { code: "BAD_GATEWAY", message: "Unable to reach the backend API." } },

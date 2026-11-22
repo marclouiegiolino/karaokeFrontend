@@ -10,5 +10,11 @@
   },
   "vars": {
     "BACKEND_API_ORIGIN": "https://karaoke-backend-production.marclouiegi-olino.workers.dev"
-  }
+  },
+  "services": [
+    {
+      "binding": "BACKEND_API",
+      "service": "karaoke-backend-production"
+    }
+  ]
 }

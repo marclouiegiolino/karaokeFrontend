@@ -64,15 +64,69 @@ test("Wrangler production, local dev, and Next dev env configurations preserve s
   assert.equal(prodConfig.assets?.directory, "./out");
   assert.deepEqual(prodConfig.assets?.run_worker_first, ["/api/*"]);
   assert.equal(prodConfig.vars?.BACKEND_API_ORIGIN, PROD_BACKEND_ORIGIN);
+  assert.deepEqual(prodConfig.services, [
+    { binding: "BACKEND_API", service: "karaoke-backend-production" },
+  ]);
 
   const devConfig = JSON.parse(stripJsonComments(await readFile(join(root, "wrangler.dev.jsonc"), "utf8")));
   assert.equal(devConfig.name, "karaoke-frontend-local");
   assert.equal(devConfig.assets?.directory, "./out");
   assert.deepEqual(devConfig.assets?.run_worker_first, ["/api/*"]);
   assert.equal(devConfig.vars?.BACKEND_API_ORIGIN, "http://localhost:8787");
+  assert.equal(devConfig.services, undefined);
 
   const exampleEnv = await readFile(join(root, ".env.development.local.example"), "utf8");
   assert.match(exampleEnv, /^NEXT_PUBLIC_API_BASE_URL=http:\/\/localhost:8787\/api$/m);
+});
+
+test("frontend Worker uses BACKEND_API service binding when bound instead of raw fetch", async () => {
+  const originalFetch = globalThis.fetch;
+  let globalFetchCalls = 0;
+  globalThis.fetch = (async () => {
+    globalFetchCalls += 1;
+    throw new Error("global fetch should not be used when BACKEND_API is bound");
+  }) as typeof fetch;
+
+  const serviceCalls: Array<{ url: string; init: RequestInit | undefined }> = [];
+  const env = {
+    ...createEnv(PROD_BACKEND_ORIGIN),
+    BACKEND_API: {
+      async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        serviceCalls.push({ url, init });
+        return new Response(JSON.stringify({ status: "ok" }), {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+            "set-cookie": "__Host-karaoke_session=sb123; Path=/; HttpOnly; Secure; SameSite=None",
+          },
+        });
+      },
+    },
+  };
+
+  try {
+    const res = await worker.fetch(
+      new Request("https://karaoke-frontend.marclouiegi-olino.workers.dev/api/health", {
+        headers: { origin: "https://karaoke-frontend.marclouiegi-olino.workers.dev" },
+      }),
+      env,
+    );
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { status: "ok" });
+    assert.equal(globalFetchCalls, 0);
+    assert.equal(serviceCalls.length, 1);
+    assert.equal(serviceCalls[0]?.url, `${PROD_BACKEND_ORIGIN}/api/health`);
+    assert.equal(
+      new Headers(serviceCalls[0]?.init?.headers).get("origin"),
+      "https://karaoke-frontend.marclouiegi-olino.workers.dev",
+    );
+    assert.deepEqual(res.headers.getSetCookie(), [
+      "__Host-karaoke_session=sb123; Path=/; HttpOnly; Secure; SameSite=None",
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("frontend Worker streams /api/* requests and forwards cookies, headers, query strings, and status codes", async () => {
