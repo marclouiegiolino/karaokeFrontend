@@ -1,0 +1,2 @@
+# Used by `npm run dev:edge`; this must point to a LOCAL backend during development.
+BACKEND_API_ORIGIN=http://localhost:8787
